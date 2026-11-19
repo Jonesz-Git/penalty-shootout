@@ -13,6 +13,7 @@ Requires Node.js (LTS).
 npm install
 npm run dev      # play locally at the printed URL
 npm test         # rules unit tests (Vitest)
+npm run simulate # balance report: Outcome rates and Solo Streaks by timing skill
 npm run build    # type-check + production build into dist/
 ```
 

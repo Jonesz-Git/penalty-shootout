@@ -37,20 +37,34 @@ export function powerBand(power: number): PowerBand {
   return 'overhit';
 }
 
+/** Middle of the Clean band: where a Kick is struck best. */
+export const SWEET_SPOT = (WEAK_LIMIT + OVERHIT_FROM) / 2;
+
+/** How well a Kick is struck: 1 on the Sweet Spot, falling to 0 at either edge of Clean; 0 outside Clean. */
+export function strikeQuality(power: number): number {
+  if (powerBand(power) !== 'clean') return 0;
+  const halfWidth = (OVERHIT_FROM - WEAK_LIMIT) / 2;
+  return Math.max(0, 1 - Math.abs(power - SWEET_SPOT) / halfWidth);
+}
+
 /** Furthest an Over-hit Kick at full Power can Scatter, in metres. */
 export const MAX_SCATTER = 1.6;
+/** Fraction of MAX_SCATTER an Over-hit Kick already has at the very start of the band. */
+export const MIN_SCATTER_FRACTION = 0.5;
 
 /**
  * Where the ball actually goes. Weak and Clean Kicks land on the Aim Point;
- * Over-hit Kicks Scatter in a random direction, further with more Power.
+ * Over-hit Kicks Scatter in a random direction — already substantially at the
+ * start of the band, and further with more Power.
  * Consumes two rng values for an Over-hit Kick (angle, then distance), none otherwise.
  * A ball scattered below the ground skids along it (y clamped to 0).
  */
 export function landingPoint(aim: Point, power: number, rng: Rng): Point {
   if (powerBand(power) !== 'overhit') return { ...aim };
   const severity = (power - OVERHIT_FROM) / (1 - OVERHIT_FROM);
+  const scale = MIN_SCATTER_FRACTION + (1 - MIN_SCATTER_FRACTION) * severity;
   const angle = rng() * 2 * Math.PI;
-  const distance = MAX_SCATTER * severity * (0.4 + 0.6 * rng());
+  const distance = MAX_SCATTER * scale * (0.4 + 0.6 * rng());
   return {
     x: aim.x + Math.cos(angle) * distance,
     y: Math.max(0, aim.y + Math.sin(angle) * distance),
@@ -104,7 +118,7 @@ export function zoneContaining(p: Point): DiveZone {
 }
 
 /** Chance the Keeper Reads a Kick at zero Power; falls linearly to 0 at the edge of Clean. */
-export const MAX_READ_CHANCE = 0.5;
+export const MAX_READ_CHANCE = 0.7;
 
 /** Chance the Keeper Reads a Kick of this Power. Only Weak Kicks can be Read. */
 export function readChance(power: number): number {
@@ -122,12 +136,47 @@ export function keeperDive(aim: Point, power: number, rng: Rng): DiveZone {
   return chooseDiveZone(rng);
 }
 
-export const REACH_AT_NO_POWER = 2.0;
-export const REACH_AT_FULL_POWER = 0.9;
+/** Keeper's Reach (metres) for the weakest possible Kick … */
+export const REACH_WEAKEST = 2.4;
+/** … shrinking linearly to this for the strongest Weak Kick. */
+export const REACH_WEAK_EDGE = 2.0;
+/** Reach for a Clean Kick struck at either edge of the band. */
+export const REACH_CLEAN_EDGE = 1.6;
+/** Reach for a Kick struck exactly on the Sweet Spot. */
+export const REACH_SWEET_SPOT = 0.5;
+/** Reach for any Over-hit Kick: the ball is fast, but it Scatters. */
+export const REACH_OVERHIT = 1.3;
 
-/** Keeper's Reach in metres; shrinks linearly as Power increases. */
-export function reach(power: number): number {
-  return REACH_AT_NO_POWER - (REACH_AT_NO_POWER - REACH_AT_FULL_POWER) * power;
+/** A Top Corner is the part of the goal within this distance of a post … */
+export const TOP_CORNER_WIDTH = 1.2;
+/** … and at least this high. */
+export const TOP_CORNER_FROM = 1.6;
+/** The Keeper's Reach is multiplied by this for a ball into a Top Corner. */
+export const TOP_CORNER_REACH_FACTOR = 0.7;
+
+export function isTopCorner(p: Point): boolean {
+  return p.y >= TOP_CORNER_FROM && (p.x <= TOP_CORNER_WIDTH || p.x >= GOAL_WIDTH - TOP_CORNER_WIDTH);
+}
+
+/**
+ * Keeper's Reach in metres for a ball of this Power landing here.
+ * Weak Kicks are easiest to reach; Clean Kicks get harder to reach the closer they
+ * are struck to the Sweet Spot; and anything into a Top Corner is harder still.
+ */
+export function reach(power: number, landing: Point): number {
+  let r: number;
+  switch (powerBand(power)) {
+    case 'weak':
+      r = REACH_WEAKEST - (REACH_WEAKEST - REACH_WEAK_EDGE) * (power / WEAK_LIMIT);
+      break;
+    case 'clean':
+      r = REACH_CLEAN_EDGE - (REACH_CLEAN_EDGE - REACH_SWEET_SPOT) * strikeQuality(power);
+      break;
+    case 'overhit':
+      r = REACH_OVERHIT;
+      break;
+  }
+  return isTopCorner(landing) ? r * TOP_CORNER_REACH_FACTOR : r;
 }
 
 // ── Resolution ───────────────────────────────────────────────────────────
@@ -159,7 +208,7 @@ export function resolveKick(aim: Point, power: number, rng: Rng): KickResult {
   } else {
     const centre = diveZoneCentre(diveZone);
     const distance = Math.hypot(landing.x - centre.x, landing.y - centre.y);
-    outcome = distance <= reach(power) ? 'save' : 'goal';
+    outcome = distance <= reach(power, landing) ? 'save' : 'goal';
   }
 
   return { aim, power, diveZone, landing, outcome };

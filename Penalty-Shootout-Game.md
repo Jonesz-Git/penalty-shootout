@@ -33,17 +33,24 @@ Penalty Shootout is a football penalty-kicking game that runs in a web browser o
 | Band | Meter | Effect |
 |------|-------|--------|
 | **Weak** | 0–50% | Ball goes to the Aim Point; slow, so the Keeper's Reach is large and he may **Read** it. |
-| **Clean** | 50–65% | Ball goes to the Aim Point; Keeper's Reach is normal. |
-| **Over-hit** | 65–100% | Fast, so the Keeper's Reach is small — but the ball **Scatters** randomly, more with more Power, and may leave the frame (a **Miss**). |
+| **Clean** | 50–65% | Ball goes to the Aim Point. The closer to the **Sweet Spot** (57.5%), the smaller the Keeper's Reach. |
+| **Over-hit** | 65–100% | Fast, so the Keeper's Reach is fairly small — but the ball **Scatters** randomly (already half the maximum at 65%, growing with Power) and may leave the frame (a **Miss**). |
 
-Thresholds are starting values, to be tuned by play-testing.
+Balls into a **Top Corner** are harder to reach whatever the Power, so a Top Corner struck on the Sweet Spot is the best Kick in the game.
+
+All numbers live in `src/rules/kick.ts` and `src/rules/meter.ts`; `npm run simulate` reports their effect.
+
+### Balance targets (checked by `npm run simulate`)
+
+- A Clean Kick on the Sweet Spot into a corner scores about 90%; at the edges of Clean about 80%.
+- Timing skill matters: a precise Kicker scores about 88% per Kick with a median Solo Streak around 5; a casual one about 70% with a median around 2.
 
 ### The Keeper
 
 - Always computer-controlled.
 - When the ball is struck, the Keeper picks one of six **Dive Zones** (left / centre / right × high / low): roughly 20% centre, 80% split across the sides.
-- Exception: he may **Read** a Weak Kick and dive straight to the Dive Zone the ball is heading for. The chance is 50% at zero Power, falling to 0% at the edge of Clean (so the right zone is ~60% likely for the weakest Kick). Clean and Over-hit Kicks are never Read.
-- If the ball ends inside the goal and within the Keeper's **Reach** of the chosen Dive Zone, it is a Save; otherwise a Goal. Reach shrinks as Power increases.
+- Exception: he may **Read** a Weak Kick and dive straight to the Dive Zone the ball is heading for. The chance is 70% at zero Power, falling to 0% at the edge of Clean (so the right zone is ~76% likely for the weakest Kick). Clean and Over-hit Kicks are never Read.
+- If the ball ends inside the goal and within the Keeper's **Reach** of the chosen Dive Zone, it is a Save; otherwise a Goal. Reach depends on the Power band, how close a Clean Kick is to the Sweet Spot, and whether the ball is in a Top Corner (see above).
 
 ## Screens
 

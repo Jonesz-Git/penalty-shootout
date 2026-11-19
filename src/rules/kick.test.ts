@@ -5,14 +5,19 @@ import {
   GOAL_HEIGHT,
   GOAL_WIDTH,
   isInFrame,
+  isTopCorner,
   keeperDive,
   landingPoint,
   MAX_READ_CHANCE,
+  MAX_SCATTER,
+  MIN_SCATTER_FRACTION,
   OVERHIT_FROM,
   powerBand,
   reach,
   readChance,
   resolveKick,
+  strikeQuality,
+  SWEET_SPOT,
   WEAK_LIMIT,
   zoneContaining,
 } from './kick';
@@ -95,7 +100,7 @@ describe('keeperDive', () => {
     expect(keeperDive(aim, 0.6, sequence(0.99))).toEqual({ column: 'right', row: 'high' });
   });
 
-  it('makes the right Dive Zone about 60% likely for the weakest Kick', () => {
+  it('makes the right Dive Zone much more likely for the weakest Kick', () => {
     // Grid over independent (Read roll, dive roll) pairs.
     let right = 0;
     const n = 100;
@@ -105,15 +110,43 @@ describe('keeperDive', () => {
         if (zone.column === 'left' && zone.row === 'low') right++;
       }
     }
-    // Read 50%, plus the random dive's 20% left-low chance on the other half.
-    expect(right / (n * n)).toBeCloseTo(0.6, 2);
+    // Read chance, plus the random dive's 20% left-low chance the rest of the time.
+    expect(right / (n * n)).toBeCloseTo(MAX_READ_CHANCE + (1 - MAX_READ_CHANCE) * 0.2, 2);
+  });
+});
+
+describe('strikeQuality', () => {
+  it('is 1 on the Sweet Spot and 0 at the edges of Clean and outside it', () => {
+    expect(strikeQuality(SWEET_SPOT)).toBeCloseTo(1);
+    expect(strikeQuality(WEAK_LIMIT)).toBeCloseTo(0);
+    expect(strikeQuality(0.2)).toBe(0);
+    expect(strikeQuality(0.9)).toBe(0);
   });
 });
 
 describe('reach', () => {
-  it('shrinks as Power increases', () => {
-    expect(reach(0)).toBeGreaterThan(reach(0.6));
-    expect(reach(0.6)).toBeGreaterThan(reach(1));
+  const midGoal = { x: 3.66, y: 1.0 };
+
+  it('is largest for Weak Kicks and smallest on the Sweet Spot', () => {
+    expect(reach(0.1, midGoal)).toBeGreaterThan(reach(WEAK_LIMIT, midGoal));
+    expect(reach(0.4, midGoal)).toBeGreaterThan(reach(WEAK_LIMIT, midGoal)); // step down into Clean
+    expect(reach(WEAK_LIMIT, midGoal)).toBeGreaterThan(reach(SWEET_SPOT, midGoal));
+    expect(reach(SWEET_SPOT, midGoal)).toBeLessThan(reach(1, midGoal));
+  });
+
+  it('is smaller for a ball into a Top Corner', () => {
+    const corner = { x: 0.5, y: 2.2 };
+    expect(isTopCorner(corner)).toBe(true);
+    expect(reach(SWEET_SPOT, corner)).toBeLessThan(reach(SWEET_SPOT, midGoal));
+  });
+
+  it.each([
+    [{ x: 0.5, y: 2.2 }, true],
+    [{ x: 6.9, y: 1.9 }, true],
+    [{ x: 0.5, y: 1.0 }, false], // too low
+    [{ x: 3.66, y: 2.3 }, false], // too central
+  ])('%o is a Top Corner: %s', (p, expected) => {
+    expect(isTopCorner(p)).toBe(expected);
   });
 });
 
@@ -124,9 +157,9 @@ describe('landingPoint', () => {
     expect(landingPoint(aim, 0.64, sequence())).toEqual(aim);
   });
 
-  it('does not Scatter at the very start of the Over-hit band', () => {
-    const p = landingPoint({ x: 2, y: 1 }, OVERHIT_FROM, sequence(0.3, 0.9));
-    expect(p.x).toBeCloseTo(2);
+  it('already Scatters at the very start of the Over-hit band', () => {
+    const p = landingPoint({ x: 2, y: 1 }, OVERHIT_FROM, sequence(0, 0)); // angle 0 (right), shortest distance
+    expect(p.x).toBeCloseTo(2 + MAX_SCATTER * MIN_SCATTER_FRACTION * 0.4);
     expect(p.y).toBeCloseTo(1);
   });
 
@@ -145,7 +178,11 @@ describe('resolveKick', () => {
   });
 
   it('is a Save when the ball ends within the Keeper\'s Reach', () => {
-    expect(resolveKick(topRightCorner, 0.6, sequence(RIGHT_HIGH)).outcome).toBe('save');
+    expect(resolveKick(topRightCorner, WEAK_LIMIT, sequence(RIGHT_HIGH)).outcome).toBe('save');
+  });
+
+  it('beats a Keeper who dived the right way when struck on the Sweet Spot into a Top Corner', () => {
+    expect(resolveKick(topRightCorner, SWEET_SPOT, sequence(RIGHT_HIGH)).outcome).toBe('goal');
   });
 
   it('lets a Weak Kick be saved where a harder Clean Kick scores', () => {

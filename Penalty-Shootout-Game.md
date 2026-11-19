@@ -32,16 +32,17 @@ Penalty Shootout is a football penalty-kicking game that runs in a web browser o
 
 | Band | Meter | Effect |
 |------|-------|--------|
-| **Weak** | 0–40% | Ball goes to the Aim Point; slow, so the Keeper's Reach is large. |
-| **Clean** | 40–80% | Ball goes to the Aim Point; Keeper's Reach is normal. |
-| **Over-hit** | 80–100% | Fast, so the Keeper's Reach is small — but the ball **Scatters** randomly, more with more Power, and may leave the frame (a **Miss**). |
+| **Weak** | 0–50% | Ball goes to the Aim Point; slow, so the Keeper's Reach is large and he may **Read** it. |
+| **Clean** | 50–65% | Ball goes to the Aim Point; Keeper's Reach is normal. |
+| **Over-hit** | 65–100% | Fast, so the Keeper's Reach is small — but the ball **Scatters** randomly, more with more Power, and may leave the frame (a **Miss**). |
 
 Thresholds are starting values, to be tuned by play-testing.
 
 ### The Keeper
 
-- Always computer-controlled; never reads the Aim Point.
+- Always computer-controlled.
 - When the ball is struck, the Keeper picks one of six **Dive Zones** (left / centre / right × high / low): roughly 20% centre, 80% split across the sides.
+- Exception: he may **Read** a Weak Kick and dive straight to the Dive Zone the ball is heading for. The chance is 50% at zero Power, falling to 0% at the edge of Clean (so the right zone is ~60% likely for the weakest Kick). Clean and Over-hit Kicks are never Read.
 - If the ball ends inside the goal and within the Keeper's **Reach** of the chosen Dive Zone, it is a Save; otherwise a Goal. Reach shrinks as Power increases.
 
 ## Screens

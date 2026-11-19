@@ -4,7 +4,7 @@
  */
 
 /** Sweeps (one pass from 0 to 1) per second at the start of any Shootout. */
-export const BASE_METER_SPEED = 0.8;
+export const BASE_METER_SPEED = 1.4;
 /** Meter Speed grows by this fraction of the base … */
 export const METER_SPEED_STEP = 0.15;
 /** … for every this-many Goals of a Solo Streak. */

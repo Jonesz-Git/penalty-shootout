@@ -67,7 +67,7 @@ The oscillating gauge the Kicker stops to choose Power.
 _Avoid_: Power bar, gauge
 
 **Weak**, **Clean**, **Over-hit**:
-The three bands of Power. A Weak Kick is easy to save, a Clean Kick goes exactly to the Aim Point, and an Over-hit Kick is hard to save but subject to Scatter.
+The three bands of Power. A Weak Kick is easy to save and may be Read, a Clean Kick goes exactly to the Aim Point, and an Over-hit Kick is hard to save but subject to Scatter.
 _Avoid_: Low/medium/high power
 
 **Scatter**:
@@ -75,8 +75,12 @@ The random deviation of an Over-hit Kick away from its Aim Point; it grows with 
 _Avoid_: Spread, inaccuracy, wobble
 
 **Dive Zone**:
-One of six regions of the goal (left, centre or right; high or low) that the Keeper commits to for a Kick, chosen at random without regard to the Aim Point.
+One of six regions of the goal (left, centre or right; high or low) that the Keeper commits to for a Kick, chosen at random unless he Reads the Kick.
 _Avoid_: Direction, side
+
+**Read**:
+When the Keeper sees a Weak Kick coming and dives to the Dive Zone the ball is heading for. The weaker the Kick, the more likely he is to Read it; Clean and Over-hit Kicks are never Read.
+_Avoid_: Guess, anticipate
 
 **Reach**:
 The area around the Keeper's Dive Zone within which the ball is saved; it shrinks as Power increases.

@@ -27,9 +27,9 @@ export function isInFrame(p: Point): boolean {
 export type PowerBand = 'weak' | 'clean' | 'overhit';
 
 /** Power below this is Weak. */
-export const WEAK_LIMIT = 0.4;
+export const WEAK_LIMIT = 0.5;
 /** Power at or above this is Over-hit. */
-export const OVERHIT_FROM = 0.8;
+export const OVERHIT_FROM = 0.65;
 
 export function powerBand(power: number): PowerBand {
   if (power < WEAK_LIMIT) return 'weak';
@@ -77,7 +77,7 @@ export const DIVE_ZONE_WEIGHTS: ReadonlyArray<{ zone: DiveZone; weight: number }
   { zone: { column: 'right', row: 'high' }, weight: 0.2 },
 ];
 
-/** Picks the Keeper's Dive Zone. Consumes one rng value; ignores the Aim Point by design. */
+/** Picks a Dive Zone at random by DIVE_ZONE_WEIGHTS. Consumes one rng value. */
 export function chooseDiveZone(rng: Rng): DiveZone {
   let roll = rng();
   for (const { zone, weight } of DIVE_ZONE_WEIGHTS) {
@@ -94,6 +94,32 @@ export function diveZoneCentre(zone: DiveZone): Point {
     x: third * (column + 0.5),
     y: zone.row === 'low' ? GOAL_HEIGHT * 0.25 : GOAL_HEIGHT * 0.75,
   };
+}
+
+/** The Dive Zone a point in the goal falls in. */
+export function zoneContaining(p: Point): DiveZone {
+  const third = GOAL_WIDTH / 3;
+  const column: DiveColumn = p.x < third ? 'left' : p.x < 2 * third ? 'centre' : 'right';
+  return { column, row: p.y < GOAL_HEIGHT / 2 ? 'low' : 'high' };
+}
+
+/** Chance the Keeper Reads a Kick at zero Power; falls linearly to 0 at the edge of Clean. */
+export const MAX_READ_CHANCE = 0.5;
+
+/** Chance the Keeper Reads a Kick of this Power. Only Weak Kicks can be Read. */
+export function readChance(power: number): number {
+  if (powerBand(power) !== 'weak') return 0;
+  return MAX_READ_CHANCE * (1 - power / WEAK_LIMIT);
+}
+
+/**
+ * The Keeper's Dive Zone for a Kick. A Weak Kick may be Read (first rng value),
+ * sending him to the zone the ball is heading for; otherwise he dives at random
+ * (one more rng value). Clean and Over-hit Kicks are never Read and consume only one.
+ */
+export function keeperDive(aim: Point, power: number, rng: Rng): DiveZone {
+  if (powerBand(power) === 'weak' && rng() < readChance(power)) return zoneContaining(aim);
+  return chooseDiveZone(rng);
 }
 
 export const REACH_AT_NO_POWER = 2.0;
@@ -118,13 +144,13 @@ export interface KickResult {
 
 /**
  * Resolves one Kick. The Keeper commits to a Dive Zone as the ball is struck
- * (first rng value), then any Scatter is applied (see landingPoint).
+ * (see keeperDive), then any Scatter is applied (see landingPoint).
  */
 export function resolveKick(aim: Point, power: number, rng: Rng): KickResult {
   if (!isInFrame(aim)) throw new RangeError('Aim Point must be inside the goal frame');
   if (!(power >= 0 && power <= 1)) throw new RangeError('Power must be between 0 and 1');
 
-  const diveZone = chooseDiveZone(rng);
+  const diveZone = keeperDive(aim, power, rng);
   const landing = landingPoint(aim, power, rng);
 
   let outcome: Outcome;

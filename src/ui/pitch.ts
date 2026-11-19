@@ -20,7 +20,13 @@ const SCALE = (GOAL_RIGHT - GOAL_LEFT) / GOAL_WIDTH; // svg units per metre
 const GOAL_TOP = GOAL_GROUND - GOAL_HEIGHT * SCALE;
 const SPOT = { x: VIEW_W / 2, y: 292 };
 const KEEPER_HOME: Point = { x: GOAL_WIDTH / 2, y: 0.95 };
+/** Glove centres in the Keeper's own drawing coordinates (see the keeper group below). */
+const GLOVES = [
+  { x: -36, y: -26 },
+  { x: 36, y: -26 },
+] as const;
 export const FLIGHT_MS = 600;
+export const REBOUND_MS = 320;
 
 function toSvg(p: Point): { x: number; y: number } {
   return { x: GOAL_LEFT + p.x * SCALE, y: GOAL_GROUND - p.y * SCALE };
@@ -45,11 +51,51 @@ function translate(p: { x: number; y: number }, extra = ''): string {
   return `translate(${p.x}px, ${p.y}px) ${extra}`.trim();
 }
 
-function diveTransform(zone: DiveZone): string {
-  const centre = toSvg(diveZoneCentre(zone));
+type Vec = { x: number; y: number };
+
+function diveRotation(zone: DiveZone): number {
   const tilt = zone.row === 'low' ? 70 : 40;
-  const rotate = zone.column === 'left' ? -tilt : zone.column === 'right' ? tilt : 0;
-  return translate(centre, `rotate(${rotate}deg)`);
+  return zone.column === 'left' ? -tilt : zone.column === 'right' ? tilt : 0;
+}
+
+/** Rotates a vector clockwise by `deg` (screen coordinates, y down) — matches CSS rotate(). */
+function rotateVec(v: Vec, deg: number): Vec {
+  const r = (deg * Math.PI) / 180;
+  return { x: v.x * Math.cos(r) - v.y * Math.sin(r), y: v.x * Math.sin(r) + v.y * Math.cos(r) };
+}
+
+function normalise(v: Vec, fallback: Vec): Vec {
+  const len = Math.hypot(v.x, v.y);
+  return len < 1e-6 ? fallback : { x: v.x / len, y: v.y / len };
+}
+
+interface KeeperPose {
+  /** Keeper's centre in svg units. */
+  at: Vec;
+  rotate: number;
+}
+
+/**
+ * Where the Keeper ends his dive. On a Save he stretches so the glove pointing
+ * most towards the ball meets it; otherwise he lands on his Dive Zone centre.
+ * Presentation only — the rules already decided the Outcome.
+ */
+function keeperPose(result: KickResult): KeeperPose {
+  const centre = toSvg(diveZoneCentre(result.diveZone));
+  const rotate = diveRotation(result.diveZone);
+  if (result.outcome !== 'save') return { at: centre, rotate };
+
+  const ball = toSvg(result.landing);
+  const sideways = result.diveZone.column === 'left' ? -1 : result.diveZone.column === 'right' ? 1 : 0;
+  const towardsBall = normalise({ x: ball.x - centre.x, y: ball.y - centre.y }, { x: sideways, y: -1 });
+  const reach = (g: Vec) => g.x * towardsBall.x + g.y * towardsBall.y;
+  const [a, b] = GLOVES.map((g) => rotateVec(g, rotate));
+  const glove = reach(b) > reach(a) ? b : a;
+  return { at: { x: ball.x - glove.x, y: Math.min(ball.y - glove.y, GOAL_GROUND - 12) }, rotate };
+}
+
+function poseTransform(pose: KeeperPose): string {
+  return translate(pose.at, `rotate(${pose.rotate}deg)`);
 }
 
 export class Pitch {
@@ -178,22 +224,46 @@ export class Pitch {
     this.prompt.dataset.tone = tone;
   }
 
-  /** Animates the ball flight and Keeper dive; resolves when both land. */
+  /**
+   * Animates the ball flight and Keeper dive; resolves when the ball reaches the goal.
+   * On a Save the ball then rebounds off the Keeper — that continues after this resolves,
+   * so the Outcome can be announced as the rebound starts.
+   */
   async playKick(result: KickResult): Promise<void> {
     const landing = toSvg(result.landing);
+    const pose = keeperPose(result);
     const ballAnim = this.ball.animate(
       [{ transform: translate(SPOT, 'scale(1)') }, { transform: translate(landing, 'scale(0.5)') }],
       { duration: FLIGHT_MS, easing: 'cubic-bezier(.15,.6,.35,1)', fill: 'forwards' },
     );
     const keeperAnim = this.keeper.animate(
-      [{ transform: translate(toSvg(KEEPER_HOME)) }, { transform: diveTransform(result.diveZone) }],
+      [{ transform: translate(toSvg(KEEPER_HOME)) }, { transform: poseTransform(pose) }],
       { duration: FLIGHT_MS * 0.9, delay: FLIGHT_MS * 0.1, easing: 'ease-out', fill: 'forwards' },
     );
     this.animations = [ballAnim, keeperAnim];
     try {
       await Promise.all([ballAnim.finished, keeperAnim.finished]);
     } catch {
-      /* cancelled by reset() */
+      return; // cancelled by reset()
     }
+    if (result.outcome === 'save') this.rebound(landing, pose.at);
+  }
+
+  /** Knocks the ball away from the Keeper's body and down towards the pitch. */
+  private rebound(from: Vec, keeperAt: Vec): void {
+    const away = normalise({ x: from.x - keeperAt.x, y: from.y - keeperAt.y }, { x: 0, y: 1 });
+    const clampX = (x: number) => Math.min(VIEW_W - 12, Math.max(12, x));
+    const clampY = (y: number) => Math.min(VIEW_H - 12, Math.max(12, y));
+    const peak = { x: clampX(from.x + away.x * 40), y: clampY(from.y + away.y * 40 - 10) };
+    const end = { x: clampX(from.x + away.x * 70), y: clampY(from.y + away.y * 30 + 70) };
+    const anim = this.ball.animate(
+      [
+        { transform: translate(from, 'scale(0.5)') },
+        { transform: translate(peak, 'scale(0.55)'), offset: 0.4 },
+        { transform: translate(end, 'scale(0.65)') },
+      ],
+      { duration: REBOUND_MS, easing: 'ease-out', fill: 'forwards' },
+    );
+    this.animations.push(anim);
   }
 }

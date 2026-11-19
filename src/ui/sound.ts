@@ -56,6 +56,50 @@ export class Sound {
     src.start(t);
   }
 
+  /** Keeper's Save: a sharp glove smack, then a crowd "ooh" that rises and falls. */
+  save(): void {
+    const ctx = this.audio();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+
+    // Glove smack: a very short, bright burst of noise over a low thud.
+    const smack = this.noise(ctx, 0.08);
+    const smackFilter = ctx.createBiquadFilter();
+    smackFilter.type = 'highpass';
+    smackFilter.frequency.value = 1800;
+    const smackGain = ctx.createGain();
+    smackGain.gain.setValueAtTime(0.9, t);
+    smackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    smack.connect(smackFilter).connect(smackGain).connect(ctx.destination);
+    smack.start(t);
+
+    const thud = ctx.createOscillator();
+    const thudGain = ctx.createGain();
+    thud.frequency.setValueAtTime(220, t);
+    thud.frequency.exponentialRampToValueAtTime(90, t + 0.08);
+    thudGain.gain.setValueAtTime(0.6, t);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    thud.connect(thudGain).connect(ctx.destination);
+    thud.start(t);
+    thud.stop(t + 0.11);
+
+    // Crowd "ooh": filtered noise whose pitch swells up then sinks.
+    const start = t + 0.08;
+    const ooh = this.noise(ctx, 1.1);
+    const oohFilter = ctx.createBiquadFilter();
+    oohFilter.type = 'bandpass';
+    oohFilter.Q.value = 3;
+    oohFilter.frequency.setValueAtTime(350, start);
+    oohFilter.frequency.linearRampToValueAtTime(650, start + 0.35);
+    oohFilter.frequency.linearRampToValueAtTime(300, start + 1.0);
+    const oohGain = ctx.createGain();
+    oohGain.gain.setValueAtTime(0.001, start);
+    oohGain.gain.exponentialRampToValueAtTime(0.6, start + 0.2);
+    oohGain.gain.exponentialRampToValueAtTime(0.001, start + 1.0);
+    ooh.connect(oohFilter).connect(oohGain).connect(ctx.destination);
+    ooh.start(start);
+  }
+
   groan(): void {
     const ctx = this.audio();
     if (!ctx) return;

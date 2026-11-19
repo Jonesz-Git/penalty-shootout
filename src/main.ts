@@ -237,9 +237,12 @@ function playShootout(initial: Shootout): void {
     if (result.outcome === 'goal') {
       sound.cheer();
       pitch.setPrompt('GOAL!', 'good');
+    } else if (result.outcome === 'save') {
+      sound.save();
+      pitch.setPrompt('SAVED!', 'bad');
     } else {
       sound.groan();
-      pitch.setPrompt(result.outcome === 'save' ? 'SAVED!' : 'MISSED!', 'bad');
+      pitch.setPrompt('MISSED!', 'bad');
     }
 
     state = state.mode === 'solo' ? recordSoloKick(state, result.outcome) : recordTwoPlayerKick(state, result.outcome);
